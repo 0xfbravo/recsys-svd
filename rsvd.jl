@@ -5,7 +5,7 @@ ITENS_NUMBER = 1682
 # readFile - MovieLens 100k (u.data)
 function readFile(dir)
   println("Reading data...")
-  file = open(dir)
+  file = open(dir,"r")
   content = readdlm(file)
   close(file)
   return content
@@ -66,14 +66,32 @@ function rsvd_prediction(matrix, U, I)
   println("Running RSVD Prediction...")
   (users, items) = ind2sub(size(matrix), find(r->r!=0, matrix))
   usersHeight = size(users)[1]
-  prediction = zeros(usersHeight,1)
+  prediction = zeros(usersHeight,2)
+  f = open("rsvd_prediction.data","a+")
   for i=1:usersHeight # Users Count
-    #todo
+    prediction[i,2] = (U[users[i,1]]' * I[items[i,1]])[1]
+    p = prediction[i,2]
+    u = users[i,1]
+    i = items[i,1]
+    println(f,"$p\t$u\t$i")
   end
-  writedlm("rsvd_prediction.data", prediction)
+  #writedlm("rsvd_prediction.data", prediction)
+  return prediction
+end
+
+# MAE
+function mae(prediction,original)
+  error = zeros(size(original)[1],1)
+  for i=1:size(original)[1]
+    error[i,1] = mean(abs(sum(prediction[i,:]) - sum(original[i,:])))
+  end
+  return mean(error[:,1])
 end
 
 # Running...
-@time ratesMatrix = rates_matrix(readFile("ml-100k/u.data"))
-@time (U,I) = rsvd_training(ratesMatrix)
-@time rsvd_prediction(ratesMatrix, U, I)
+training = find(r->r, shuffle(1:100000) .> 20000)
+test = setdiff(1:100000,training)
+@time ratesMatrixTraining = rates_matrix(readFile("ml-100k/u.data")[training,:])
+@time ratesMatrixTest = rates_matrix(readFile("ml-100k/u.data")[test,:])
+@time (U,I) = rsvd_training(ratesMatrixTraining)
+@time prediction = rsvd_prediction(ratesMatrixTest, U, I)
