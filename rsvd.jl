@@ -64,19 +64,31 @@ end
 # RSVD Prediction - @insidemybrain
 function rsvd_prediction(matrix, U, I)
   println("Running RSVD Prediction...")
+
+  # Users and Items Indexes where Rate != 0 (Vectors)
   (users, items) = ind2sub(size(matrix), find(r->r!=0, matrix))
   usersHeight = size(users)[1]
-  prediction = zeros(usersHeight,2)
+
+  prediction = zeros(usersHeight,1)
   f = open("rsvd_prediction.data","a+")
-  for i=1:usersHeight # Users Count
-    prediction[i,2] = (U[users[i,1]]' * I[items[i,1]])[1]
-    p = prediction[i,2]
+  for i=1:usersHeight
+    prediction[i,1] = abs((U[users[i]]' * I[items[i]])[1])
+    p = prediction[i,1]
     u = users[i,1]
     i = items[i,1]
-    println(f,"$p\t$u\t$i")
+    println(f,"$u\t$i\t$p")
   end
-  #writedlm("rsvd_prediction.data", prediction)
   return prediction
+end
+
+# Paulo
+function r(matrix,slice)
+  println(size(matrix),"\t",size(slice))
+  newMatrix = copy(matrix)
+  k = setdiff(shuffle(1:100000),slice)
+  newMatrix[k,2] .= -1
+  println(size(newMatrix))
+  return newMatrix
 end
 
 # MAE
@@ -89,9 +101,13 @@ function mae(prediction,original)
 end
 
 # Running...
-training = find(r->r, shuffle(1:100000) .> 20000)
-test = setdiff(1:100000,training)
+rm("rsvd_prediction.data")
+rm("rsvd_trained_users.data")
+rm("rsvd_trained_items.data")
+rm("rsvd_trained_errors.data")
+training = find(r->r, shuffle(1:100000) .> 20000) # 80k
+test = setdiff(1:100000,training) # 20k
 @time ratesMatrixTraining = rates_matrix(readFile("ml-100k/u.data")[training,:])
-@time ratesMatrixTest = rates_matrix(readFile("ml-100k/u.data")[test,:])
+@time ratesMatrixTest = rates_matrix(r(readFile("ml-100k/u.data"),test))
 @time (U,I) = rsvd_training(ratesMatrixTraining)
 @time prediction = rsvd_prediction(ratesMatrixTest, U, I)
