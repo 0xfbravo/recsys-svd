@@ -1,7 +1,3 @@
-# Definitions
-USERS_NUMBER = 943
-ITENS_NUMBER = 1682
-
 # readFile - MovieLens 100k (u.data)
 function readFile(dir)
   println("Reading data...")
@@ -13,8 +9,10 @@ end
 
 # Create a Rates Matrix (UsersxItens) - @GSegobia
 function rates_matrix(file_content)
-  complete_users_rates = zeros(USERS_NUMBER, ITENS_NUMBER)
-  for i in 1:USERS_NUMBER
+  usersNo = convert(Int64,maximum(file_content[:,1]))
+  itemsNo = convert(Int64, maximum(file_content[:,2]))
+  complete_users_rates = zeros(usersNo, itemsNo)
+  for i in 1:usersNo
     user = find(x->(x == i), file_content[:, 1])
     for j in 1:length(user)
       complete_users_rates[i, convert(Int64, file_content[user[j], 2])] = file_content[user[j], 3]
@@ -24,7 +22,7 @@ function rates_matrix(file_content)
 end
 
 # RSVD Training - @filipebraida @insidemybrain
-function rsvd_training(matrix, maxIterations = 120, lrate = .001, λ = .02, Δ = .03)
+function rsvd_training(matrix, lrate = .0003, λ = .0013, Δ = .00032)
   println("Running RSVD Training...")
   (U,S,I) = svd(matrix)
 
@@ -38,17 +36,17 @@ function rsvd_training(matrix, maxIterations = 120, lrate = .001, λ = .02, Δ =
 
   # Error Vector
   baseError = zeros(usersHeight,1)
-  iterationError = zeros(maxIterations,1)
+  iterationError = zeros(usersHeight,1)
 
   # Training
   keepTrying = true
   iteration = 1
   while(keepTrying)
     for i=1:usersHeight
-      baseError[i,1] = matrix[users[i],items[i]] - (U[users[i,1]]' * I[items[i,1]])[1]
+      baseError[i,1] = matrix[users[i,1],items[i,1]] - (U[users[i,1]]' * I[items[i,1]])[1]
 
-      U[users[i],:] += lrate * (baseError[i,1] * I[items[i],:] - λ * U[users[i],:])
-      I[items[i],:] += lrate * (baseError[i,1] * U[users[i],:] - λ * I[items[i],:])
+      U[users[i,1]] += lrate * (baseError[i,1] * I[items[i,1]] - λ * U[users[i,1]])
+      I[items[i,1]] += lrate * (baseError[i,1] * U[users[i,1]] - λ * I[items[i,1]])
     end
     iterationError[iteration] = mean(abs(baseError))
     keepTrying = !(iteration > 1 && (mean(baseError) < Δ || iterationError[iteration] > iterationError[iteration-1]))
@@ -69,21 +67,18 @@ function rsvd_prediction(matrix, U, I)
   (users, items) = ind2sub(size(matrix), find(r->r!=0, matrix))
   usersHeight = size(users)[1]
 
-  prediction = zeros(usersHeight,1)
-  f = open("rsvd_prediction.data","r+")
+  prediction = zeros(usersHeight,3)
   for i=1:usersHeight
-    prediction[i,1] = abs((U[users[i]]' * I[items[i]])[1])
-    p = prediction[i,1]
-    u = users[i,1]
-    i = items[i,1]
-    println(f,"$u\t$i\t$p")
+    prediction[i,1] = users[i,1]
+    prediction[i,2] = items[i,1]
+    prediction[i,3] = abs((U[users[i,1]]' * I[items[i,1]])[1])
   end
+  writedlm("rsvd_prediction.data", prediction)
   return prediction
 end
 
 # Paulo
 function r(matrix,slice)
-
   newMatrix = copy(matrix)
   k = setdiff(shuffle(1:100000),slice)
   newMatrix[k,3] .= -1
@@ -93,11 +88,24 @@ end
 
 # MAE
 function mae(prediction,original)
-  error = zeros(size(original)[1],1)
-  for i=1:size(original)[1]
-    error[i,1] = mean(abs(sum(prediction[i,:]) - sum(original[i,:])))
+  println("Running RSVD Training...")
+  maeResults=[]
+  p = sortrows(prediction, by=x->(x[2],x[1]))
+  o = sortrows(original, by=x->(x[2],x[1]))
+
+  globalMean = mean(original[:,3])
+  for item=1:maximum(original[:,2]) # For Each Item
+    originalRatesOfItem = find(r->r==item,original[:,2])
+    predictedRatesOfItem = find(r->r==item,prediction[:,2])
+    meanActualItem = mean(abs(prediction[predictedRatesOfItem,3] - original[originalRatesOfItem,3]))
+    push!(maeResults,meanActualItem)
+    println(meanActualItem)
   end
-  return mean(error[:,1])
+
+  writedlm("sort/sorted_prediction.data",p)
+  writedlm("sort/sorted_original.data",o)
+  writedlm("rsvd_mae_result.data",maeResults)
+  return maeResults
 end
 
 # Running...
@@ -110,3 +118,5 @@ matrix20 = r(originalMatrix,test)
 @time ratesMatrixTest = rates_matrix(matrix20)
 @time (U,I) = rsvd_training(ratesMatrixTraining)
 @time prediction = rsvd_prediction(ratesMatrixTest, U, I)
+@time maeResults = mae(prediction,originalMatrix)
+println(mean(maeResults))
