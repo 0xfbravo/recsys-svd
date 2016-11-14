@@ -70,7 +70,7 @@ function rsvd_prediction(matrix, U, I)
   usersHeight = size(users)[1]
 
   prediction = zeros(usersHeight,1)
-  f = open("rsvd_prediction.data","a+")
+  f = open("rsvd_prediction.data","r+")
   for i=1:usersHeight
     prediction[i,1] = abs((U[users[i]]' * I[items[i]])[1])
     p = prediction[i,1]
@@ -83,11 +83,11 @@ end
 
 # Paulo
 function r(matrix,slice)
-  println(size(matrix),"\t",size(slice))
+
   newMatrix = copy(matrix)
   k = setdiff(shuffle(1:100000),slice)
-  newMatrix[k,2] .= -1
-  println(size(newMatrix))
+  newMatrix[k,3] .= -1
+  writedlm("novaMatriz",newMatrix)
   return newMatrix
 end
 
@@ -101,13 +101,12 @@ function mae(prediction,original)
 end
 
 # Running...
-rm("rsvd_prediction.data")
-rm("rsvd_trained_users.data")
-rm("rsvd_trained_items.data")
-rm("rsvd_trained_errors.data")
 training = find(r->r, shuffle(1:100000) .> 20000) # 80k
 test = setdiff(1:100000,training) # 20k
-@time ratesMatrixTraining = rates_matrix(readFile("ml-100k/u.data")[training,:])
-@time ratesMatrixTest = rates_matrix(r(readFile("ml-100k/u.data"),test))
+
+originalMatrix = readFile("ml-100k/u.data")
+matrix20 = r(originalMatrix,test)
+@time ratesMatrixTraining = rates_matrix(originalMatrix[training,:])
+@time ratesMatrixTest = rates_matrix(matrix20)
 @time (U,I) = rsvd_training(ratesMatrixTraining)
 @time prediction = rsvd_prediction(ratesMatrixTest, U, I)
