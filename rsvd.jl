@@ -1,5 +1,5 @@
 # Config
-PATH = "/Users/insidemybrain/recsys-svd/"
+PATH = "/home/over/git/recsys-SVD/"
 
 # readFile - MovieLens 100k (u.data)
 function readFile(dir)
@@ -118,15 +118,19 @@ function change_rate(rate)
   elseif (rate == 3) return 2
   elseif (rate == 4) return 3
   elseif (rate == 5) return 1
+  else return 0
   end
 end
 
 # Noise
-function add_noise(original, percentage = 3)
-  base = find(r->r, shuffle(1:100000) .> (100000 - (percentage * 1000)))
-  matrix = rates_matrix(original[base,:])
-  map(change_rate,matrix)
-  return matrix
+function add_noise(original, percentage = 1)
+  base = find(r->r, shuffle(1:100000) .> ((1-percentage/100)*1000))
+  for i in 1:size(original)[1]
+    if(in(i,base))
+      original[i,3] = change_rate(original[i,3]);
+    end
+  end
+  return original
 end
 
 # Mahony's Algorithm
@@ -150,13 +154,13 @@ training = find(r->r, shuffle(1:100000) .> 20000) # 80k
 test = setdiff(1:100000,training) # 20k
 
 originalMatrix = readFile(string(PATH,"ml-100k/u.data"))
+originalMatrix = add_noise(originalMatrix,0.5);
 matrix20 = r(originalMatrix,test)
-@time noiseMatrix = add_noise(originalMatrix)
 @time ratesMatrixTraining = rates_matrix(originalMatrix[training,:])
-#@time ratesMatrixTest = rates_matrix(matrix20)
-#@time (U,I) = rsvd_training(ratesMatrixTraining)
-#@time prediction = rsvd_prediction(ratesMatrixTest, U, I)
-#@time println("Mahony's Corrections: ",mahony_correction(prediction,originalMatrix)," itens")
+@time ratesMatrixTest = rates_matrix(matrix20)
+@time (U,I) = rsvd_training(ratesMatrixTraining)
+@time prediction = rsvd_prediction(ratesMatrixTest, U, I)
+@time println("Mahony's Corrections: ",mahony_correction(prediction,originalMatrix)," itens")
 #@time toledo = possibly_noisy_ratings(U,I)
 #@time maeResults = mae(prediction,originalMatrix)
 #println(mean(maeResults))
