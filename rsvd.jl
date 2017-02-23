@@ -1,3 +1,6 @@
+# Config
+PATH = "/Users/insidemybrain/recsys-svd/"
+
 # readFile - MovieLens 100k (u.data)
 function readFile(dir)
   println("Reading data...")
@@ -53,9 +56,9 @@ function rsvd_training(matrix, lrate = .0003, λ = .0013, Δ = .00032)
     iteration += 1
   end
   println("Finished RSVD Training with ",iteration," iterations.")
-  writedlm("rsvd_trained_users.data", U)
-  writedlm("rsvd_trained_items.data", I)
-  writedlm("rsvd_trained_errors.data", baseError)
+  writedlm(string(PATH,"rsvd_trained_users.data"), U)
+  writedlm(string(PATH,"rsvd_trained_items.data"), I)
+  writedlm(string(PATH,"rsvd_trained_errors.data"), baseError)
   return (U,I)
 end
 
@@ -73,7 +76,7 @@ function rsvd_prediction(matrix, U, I)
     prediction[i,2] = items[i,1]
     prediction[i,3] = abs((U[users[i,1]]' * I[items[i,1]])[1])
   end
-  writedlm("rsvd_prediction.data", prediction)
+  writedlm(string(PATH,"rsvd_prediction.data"), prediction)
   return prediction
 end
 
@@ -102,21 +105,58 @@ function mae(prediction,original)
     println(meanActualItem)
   end
 
-  writedlm("sort/sorted_prediction.data",p)
-  writedlm("sort/sorted_original.data",o)
-  writedlm("rsvd_mae_result.data",maeResults)
+  writedlm(string(PATH,"sort/sorted_prediction.data"),p)
+  writedlm(string(PATH,"sort/sorted_original.data"),o)
+  writedlm(string(PATH,"rsvd_mae_result.data"),maeResults)
   return maeResults
+end
+
+# Change Rate
+function change_rate(rate)
+  if (rate == 1) return 5
+  elseif (rate == 2) return 4
+  elseif (rate == 3) return 2
+  elseif (rate == 4) return 3
+  elseif (rate == 5) return 1
+  end
+end
+
+# Noise
+function add_noise(original, percentage = 3)
+  base = find(r->r, shuffle(1:100000) .> (100000 - (percentage * 1000)))
+  matrix = rates_matrix(original[base,:])
+  map(change_rate,matrix)
+  return matrix
+end
+
+# Mahony's Algorithm
+function mahony(prediction, rate, min = 1, max = 5, th = .5)
+  return find(r-> r > th, abs(rate - prediction) ./ (max - min))
+end
+
+function mahony_correction(prediction,original)
+  println("Running Mahony Correction...")
+  o = sortrows(original, by=x->(x[2],x[1]))
+  return length(mahony(prediction[:,3],o[:,3]))
+end
+
+# Toledo's Algorithm
+function possibly_noisy_ratings(U,I)
+  println(U,I)
 end
 
 # Running...
 training = find(r->r, shuffle(1:100000) .> 20000) # 80k
 test = setdiff(1:100000,training) # 20k
 
-originalMatrix = readFile("ml-100k/u.data")
+originalMatrix = readFile(string(PATH,"ml-100k/u.data"))
 matrix20 = r(originalMatrix,test)
+@time noiseMatrix = add_noise(originalMatrix)
 @time ratesMatrixTraining = rates_matrix(originalMatrix[training,:])
-@time ratesMatrixTest = rates_matrix(matrix20)
-@time (U,I) = rsvd_training(ratesMatrixTraining)
-@time prediction = rsvd_prediction(ratesMatrixTest, U, I)
-@time maeResults = mae(prediction,originalMatrix)
-println(mean(maeResults))
+#@time ratesMatrixTest = rates_matrix(matrix20)
+#@time (U,I) = rsvd_training(ratesMatrixTraining)
+#@time prediction = rsvd_prediction(ratesMatrixTest, U, I)
+#@time println("Mahony's Corrections: ",mahony_correction(prediction,originalMatrix)," itens")
+#@time toledo = possibly_noisy_ratings(U,I)
+#@time maeResults = mae(prediction,originalMatrix)
+#println(mean(maeResults))
