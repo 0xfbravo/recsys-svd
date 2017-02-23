@@ -124,12 +124,13 @@ end
 
 # Noise
 function add_noise(original, percentage = 1)
-  base = find(r->r, shuffle(1:100000) .> ((1-percentage/100)*1000))
+  base = find(r->r, shuffle(1:100000) .> 100000 - percentage * 1000)
   for i in 1:size(original)[1]
     if(in(i,base))
       original[i,3] = change_rate(original[i,3]);
     end
   end
+  println(size(base))
   return original
 end
 
@@ -154,13 +155,13 @@ training = find(r->r, shuffle(1:100000) .> 20000) # 80k
 test = setdiff(1:100000,training) # 20k
 
 originalMatrix = readFile(string(PATH,"ml-100k/u.data"))
-originalMatrix = add_noise(originalMatrix,0.5);
+originalMatrix = add_noise(originalMatrix,10);
 matrix20 = r(originalMatrix,test)
 @time ratesMatrixTraining = rates_matrix(originalMatrix[training,:])
 @time ratesMatrixTest = rates_matrix(matrix20)
 @time (U,I) = rsvd_training(ratesMatrixTraining)
 @time prediction = rsvd_prediction(ratesMatrixTest, U, I)
-@time println("Mahony's Corrections: ",mahony_correction(prediction,originalMatrix)," itens")
+#@time println("Mahony's Corrections: ",mahony_correction(prediction,originalMatrix)," itens")
 #@time toledo = possibly_noisy_ratings(U,I)
 #@time maeResults = mae(prediction,originalMatrix)
 #println(mean(maeResults))
