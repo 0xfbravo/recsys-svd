@@ -1,5 +1,7 @@
+using MLBase
+
 # Config
-PATH = "/home/over/git/recsys-SVD/"
+PATH = "/Users/insidemybrain/recsys-svd/"
 
 # readFile - MovieLens 100k (u.data)
 function readFile(dir)
@@ -125,13 +127,10 @@ end
 # Noise
 function add_noise(original, percentage = 1)
   base = find(r->r, shuffle(1:100000) .> 100000 - percentage * 1000)
-  for i in 1:size(original)[1]
-    if(in(i,base))
-      original[i,3] = change_rate(original[i,3]);
-    end
+  for i in 1:size(base)[1]
+    original[base[i],3] = change_rate(original[i,3])
   end
-  println(size(base))
-  return original
+  return (original,base)
 end
 
 # Mahony's Algorithm
@@ -139,15 +138,15 @@ function mahony(prediction, rate, min = 1, max = 5, th = .5)
   return find(r-> r > th, abs(rate - prediction) ./ (max - min))
 end
 
-function mahony_correction(prediction,original)
+function mahony_correction(prediction,original,base)
   println("Running Mahony Correction...")
   o = sortrows(original, by=x->(x[2],x[1]))
-  return length(mahony(prediction[:,3],o[:,3]))
-end
-
-# Toledo's Algorithm
-function possibly_noisy_ratings(U,I)
-  println(U,I)
+  mah = mahony(prediction[:,3],o[:,3])
+  matrixBase = zeros(Bool,100000)
+  matrixBase[base] = true
+  matrixMah = zeros(Bool,100000)
+  matrixMah[mah] = true
+  return (length(mah),roc(matrixBase,matrixMah))
 end
 
 # Running...
@@ -155,13 +154,14 @@ training = find(r->r, shuffle(1:100000) .> 20000) # 80k
 test = setdiff(1:100000,training) # 20k
 
 originalMatrix = readFile(string(PATH,"ml-100k/u.data"))
-originalMatrix = add_noise(originalMatrix,10);
+(originalMatrix, base) = add_noise(originalMatrix,1.7);
 matrix20 = r(originalMatrix,test)
-@time ratesMatrixTraining = rates_matrix(originalMatrix[training,:])
-@time ratesMatrixTest = rates_matrix(matrix20)
-@time (U,I) = rsvd_training(ratesMatrixTraining)
-@time prediction = rsvd_prediction(ratesMatrixTest, U, I)
-#@time println("Mahony's Corrections: ",mahony_correction(prediction,originalMatrix)," itens")
-#@time toledo = possibly_noisy_ratings(U,I)
+ratesMatrixTraining = rates_matrix(originalMatrix[training,:])
+ratesMatrixTest = rates_matrix(matrix20)
+(U,I) = rsvd_training(ratesMatrixTraining)
+prediction = rsvd_prediction(ratesMatrixTest, U, I)
+(mahonyCorrections,rocBalboa) = mahony_correction(prediction,originalMatrix,base)
+println("Mahony's Corrections: ",mahonyCorrections," itens")
+println("Precision: ",precision(rocBalboa)," Recall:",recall(rocBalboa)," F1:",f1score(rocBalboa))
 #@time maeResults = mae(prediction,originalMatrix)
 #println(mean(maeResults))
